@@ -1,32 +1,36 @@
 #!/usr/bin/env python
 
-"""
-Created on 29 July 2012
-@author: Lisa Simpson
-"""
-
-from __future__ import print_function, division
 import rospy
-from neato_node.msg import Bump
-from geometry_msgs.msg import Twist, Vector3
+from gazebo_msgs.msg import ContactsState
+from geometry_msgs.msg import Twist
 
-class EmergencyStopNode(object):
+class EStop():
     def __init__(self):
-        rospy.init_node('emergency_stop')
-        rospy.Subscriber('/bump', Bump, self.process_bump)
-        self.pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.desired_velocity = 0.3
+        rospy.init_node("estop")
+        self.bump_sub = rospy.Subscriber("/bumper", ContactsState, self.bumpCB)
+        self.twist_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+        self.update_rate = rospy.Rate(10)
+        self.activated = 1
 
-    def process_bump(self, msg):
-        if any((msg.leftFront, msg.leftSide, msg.rightFront, msg.rightSide)):
-            self.desired_velocity = 0.0
+    def bumpCB(self, msg):
+        if len(msg.states) > 0:
+            rospy.loginfo_once("E-stopped due to bumper")
+            self.activated = 0
 
     def run(self):
-        r = rospy.Rate(10)
         while not rospy.is_shutdown():
-            self.pub.publish(Twist(linear=Vector3(x=self.desired_velocity)))
-            r.sleep()
+            if self.activated == 1:
+                cmd = Twist()
+                cmd.linear.x = 0.4
+                self.twist_pub.publish(cmd)
+            else:
+                cmd = Twist()
+                cmd.linear.x = 0
+                self.twist_pub.publish(cmd)
 
-if __name__ == '__main__':
-    estop = EmergencyStopNode()
-    estop.run()
+            self.update_rate.sleep()
+
+
+if __name__ == "__main__":
+    es = EStop()
+    es.run()
